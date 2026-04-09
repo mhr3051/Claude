@@ -1,0 +1,24 @@
+# Distillation autoresearch configuration
+
+teacher:
+  model: "gpt-oss-120b"
+
+students:
+  - model: "qwen3-4b"
+  - model: "qwen3-8b"
+  - model: "llama4-scout"
+
+eval:
+  path: "eval/eval_set.jsonl"  # path to evaluation dataset
+
+budget:
+  dollars: 200.0
+  time_per_experiment_minutes: 60
+
+score_weights:
+  w_quality: 1.0
+  w_cost: 0.3
+  w_latency: 0.2
+
+runner:
+  iterations: 5
