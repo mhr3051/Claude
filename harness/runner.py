@@ -3,12 +3,14 @@
 import argparse
 import importlib
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
+from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
 EXPERIMENT_PY = ROOT / "experiment.py"
@@ -47,7 +49,6 @@ def inject_iteration_marker(iteration: int) -> None:
     """Write a marker comment into experiment.py so there is a real diff."""
     lines = EXPERIMENT_PY.read_text().splitlines(keepends=True)
     marker = f"# iteration: {iteration}, ts: {datetime.now(timezone.utc).isoformat()}\n"
-    # Replace existing marker or prepend
     if lines and lines[0].startswith("# iteration:"):
         lines[0] = marker
     else:
@@ -61,7 +62,6 @@ def append_log(iteration: int, score: float, kept: bool, checkpoint_id: str) -> 
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     line = f"| {iteration} | {ts} | {score:.4f} | {status} | {checkpoint_id} |\n"
     text = PROGRAM_MD.read_text()
-    # Insert after the header row of the experiment log table
     anchor = "| --- | --- | --- | --- | --- |\n"
     if anchor in text:
         idx = text.index(anchor) + len(anchor)
@@ -71,38 +71,47 @@ def append_log(iteration: int, score: float, kept: bool, checkpoint_id: str) -> 
     PROGRAM_MD.write_text(text)
 
 
-def run_one_iteration(iteration: int, config: dict) -> None:
+def run_one_iteration(
+    iteration: int, config: dict, dry_run: bool = False, tf_client=None
+) -> None:
     print(f"\n{'='*50}")
     print(f"Iteration {iteration}")
     print(f"{'='*50}")
 
-    # 1. Inject marker so experiment.py has a diff
     inject_iteration_marker(iteration)
 
-    # 2. Run experiment
     if "experiment" in sys.modules:
         importlib.reload(sys.modules["experiment"])
     else:
         importlib.import_module("experiment")
-    result = sys.modules["experiment"].run(config)
+
+    exp_module = sys.modules["experiment"]
+    if dry_run:
+        result = exp_module.run(config)
+    else:
+        result = exp_module.run(config, tf_client=tf_client)
     checkpoint_id = result["checkpoint_id"]
+    hf_model_id = result.get("hf_model_id", checkpoint_id)
     print(f"  checkpoint: {checkpoint_id}")
 
-    # 3. Eval (stubbed)
     from harness.eval import evaluate
     eval_result = evaluate(
-        endpoint_url=f"https://fake/{checkpoint_id}",
+        hf_model_id=hf_model_id,
         eval_path=config["eval"]["path"],
+        dry_run=dry_run,
     )
     print(f"  quality:    {eval_result['quality_score']:.4f}")
 
-    # 4. Cost (stubbed)
     from harness.cost import measure
-    cost_result = measure(endpoint_url=f"https://fake/{checkpoint_id}")
+    cost_result = measure(
+        hf_model_id=hf_model_id,
+        eval_path=config["eval"]["path"],
+        sample_count=config["eval"].get("sample_count", 20),
+        dry_run=dry_run,
+    )
     print(f"  $/1M tok:   {cost_result['dollars_per_1m_tokens']:.2f}")
     print(f"  p99 lat:    {cost_result['p99_latency_ms']:.0f}ms")
 
-    # 5. Score
     from harness.score import compute
     new_score = compute(
         quality_score=eval_result["quality_score"],
@@ -112,9 +121,11 @@ def run_one_iteration(iteration: int, config: dict) -> None:
     )
     print(f"  score:      {new_score:.4f}")
 
-    # 6. Compare against best
     best = load_best()
-    print(f"  best so far: {best['score']:.4f}" if best["score"] != float("-inf") else "  best so far: none")
+    if best["score"] != float("-inf"):
+        print(f"  best so far: {best['score']:.4f}")
+    else:
+        print("  best so far: none")
 
     if new_score > best["score"]:
         print(f"  >> NEW BEST (improved by {new_score - best['score']:.4f})")
@@ -122,6 +133,7 @@ def run_one_iteration(iteration: int, config: dict) -> None:
             "score": new_score,
             "iteration": iteration,
             "checkpoint_id": checkpoint_id,
+            "hf_model_id": hf_model_id,
         })
         git("add", "experiment.py", "experiments/best.json")
         git("commit", "-m", f"experiment {iteration}: score {new_score:.4f} (keep)")
@@ -129,7 +141,7 @@ def run_one_iteration(iteration: int, config: dict) -> None:
         git("add", "program.md")
         git("commit", "-m", f"log: iteration {iteration} kept")
     else:
-        print(f"  >> REVERTED (no improvement)")
+        print("  >> REVERTED (no improvement)")
         git("checkout", "--", "experiment.py")
         append_log(iteration, new_score, kept=False, checkpoint_id=checkpoint_id)
         git("add", "program.md")
@@ -138,22 +150,33 @@ def run_one_iteration(iteration: int, config: dict) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Distillation autoresearch runner")
-    parser.add_argument("--iterations", type=int, default=None, help="Number of iterations")
+    parser.add_argument("--iterations", type=int, default=None)
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Use stubs instead of real API calls",
+    )
     args = parser.parse_args()
 
-    # Ensure experiment.py is importable
+    load_dotenv()
+
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
 
     config = load_config()
     iterations = args.iterations or config.get("runner", {}).get("iterations", 5)
 
+    tf_client = None
+    if not args.dry_run:
+        from harness.tf_client import TokenFactoryClient
+        tf_client = TokenFactoryClient()
+
     print(f"Starting distillation autoresearch loop ({iterations} iterations)")
     print(f"Teacher: {config['teacher']['model']}")
     print(f"Students: {[s['model'] for s in config['students']]}")
+    print(f"Mode: {'dry-run (stubs)' if args.dry_run else 'live'}")
 
     for i in range(1, iterations + 1):
-        run_one_iteration(i, config)
+        run_one_iteration(i, config, dry_run=args.dry_run, tf_client=tf_client)
 
     best = load_best()
     print(f"\n{'='*50}")

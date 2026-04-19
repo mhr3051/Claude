@@ -1,15 +1,32 @@
 # Distillation autoresearch configuration
 
 teacher:
-  model: "gpt-oss-120b"
+  model: "unsloth/gpt-oss-120b-BF16"
 
 students:
-  - model: "qwen3-4b"
-  - model: "qwen3-8b"
-  - model: "llama4-scout"
+  - model: "Qwen/Qwen3-4B"
+  - model: "Qwen/Qwen3-8B"
+  - model: "meta-llama/Meta-Llama-3.1-8B-Instruct"
+
+fine_tuning:
+  lora: true
+  lora_r: 16
+  lora_alpha: 16
+  lora_dropout: 0.05
+  n_epochs: 3
+  batch_size: 8
+  learning_rate: 0.00001
+  context_length: 8192
+  packing: true
+  max_grad_norm: 1.0
+
+hf:
+  org: "PLACEHOLDER"  # your HuggingFace org or username
 
 eval:
-  path: "eval/eval_set.jsonl"  # path to evaluation dataset
+  path: "eval/eval_set.jsonl"
+  method: "exact_match"
+  sample_count: 20  # number of cost-measurement prompts
 
 budget:
   dollars: 200.0

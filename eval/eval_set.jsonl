@@ -1,0 +1,10 @@
+{"messages": [{"role": "user", "content": "What is the capital of France?"}, {"role": "assistant", "content": "Paris"}], "expected": "Paris"}
+{"messages": [{"role": "user", "content": "What is 2 + 2?"}, {"role": "assistant", "content": "4"}], "expected": "4"}
+{"messages": [{"role": "user", "content": "What color is the sky on a clear day?"}, {"role": "assistant", "content": "Blue"}], "expected": "Blue"}
+{"messages": [{"role": "user", "content": "What is the chemical symbol for water?"}, {"role": "assistant", "content": "H2O"}], "expected": "H2O"}
+{"messages": [{"role": "user", "content": "How many continents are there?"}, {"role": "assistant", "content": "7"}], "expected": "7"}
+{"messages": [{"role": "user", "content": "What planet is closest to the Sun?"}, {"role": "assistant", "content": "Mercury"}], "expected": "Mercury"}
+{"messages": [{"role": "user", "content": "What is the square root of 144?"}, {"role": "assistant", "content": "12"}], "expected": "12"}
+{"messages": [{"role": "user", "content": "Who wrote Romeo and Juliet?"}, {"role": "assistant", "content": "William Shakespeare"}], "expected": "William Shakespeare"}
+{"messages": [{"role": "user", "content": "What is the boiling point of water in Celsius?"}, {"role": "assistant", "content": "100"}], "expected": "100"}
+{"messages": [{"role": "user", "content": "What is the largest ocean on Earth?"}, {"role": "assistant", "content": "Pacific Ocean"}], "expected": "Pacific Ocean"}
