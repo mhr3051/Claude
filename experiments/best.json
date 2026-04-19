@@ -1,5 +1,6 @@
 {
-  "score": 0.6358826715497455,
-  "iteration": 5,
-  "checkpoint_id": "fake-ckpt-641592cd"
+  "score": 0.7605393387435804,
+  "iteration": 3,
+  "checkpoint_id": "fake-ckpt-84d04354",
+  "hf_model_id": "fake-ckpt-84d04354"
 }
